@@ -1,0 +1,331 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { useAuth } from '../hooks/useAuth';
+import chatbotService from '../services/chatbotService';
+import authService from '../services/authService';
+import { useToast } from '../components/Toast';
+import { 
+  Send, 
+  Bot, 
+  User, 
+  Languages, 
+  UserCheck, 
+  Trash2,
+  Loader
+} from 'lucide-react';
+
+const Chatbot = () => {
+  const { user, isAdmin } = useAuth();
+  const toast = useToast();
+  
+  // Chat stream list
+  const [messages, setMessages] = useState([
+    {
+      id: 'greet-1',
+      sender: 'bot',
+      text: 'Hello! I am your Public Health Assistant. How can I help you today with your vaccinations or symptoms?',
+      timestamp: new Date()
+    }
+  ]);
+  
+  const [inputText, setInputText] = useState('');
+  const [language, setLanguage] = useState('en');
+  const [selectedUserId, setSelectedUserId] = useState(user?.id || '');
+  const [useGuest, setUseGuest] = useState(false);
+  const [usersList, setUsersList] = useState([]);
+  
+  const [sending, setSending] = useState(false);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  
+  const messagesEndRef = useRef(null);
+
+  // Auto-scroll chat to the bottom on new messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, sending]);
+
+  // Fetch users list to query chatbot on behalf of patients (Admin only)
+  useEffect(() => {
+    if (!isAdmin) return;
+    const fetchUsers = async () => {
+      setLoadingUsers(true);
+      try {
+        const data = await authService.getUsers(0, 100);
+        setUsersList(data);
+      } catch (error) {
+        console.error("Failed to load users for chat context:", error);
+      } finally {
+        setLoadingUsers(false);
+      }
+    };
+    fetchUsers();
+  }, [isAdmin]);
+
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!inputText.trim()) return;
+
+    const userMessageText = inputText.trim();
+    setInputText('');
+    setSending(true);
+
+    // Append user message to stream
+    const userMsgId = Math.random().toString(36).substring(2, 9);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: userMsgId,
+        sender: 'user',
+        text: userMessageText,
+        timestamp: new Date()
+      }
+    ]);
+
+    try {
+      const chatUserId = isAdmin ? (useGuest ? null : selectedUserId) : user?.id;
+      
+      const response = await chatbotService.query({
+        user_id: chatUserId,
+        message: userMessageText,
+        language: language,
+        channel: 'web'
+      });
+
+      // Append bot response to stream
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: response.message_id || Math.random().toString(36).substring(2, 9),
+          sender: 'bot',
+          text: response.response_text,
+          detectedLanguage: response.detected_language,
+          timestamp: response.timestamp ? new Date(response.timestamp) : new Date()
+        }
+      ]);
+    } catch (error) {
+      console.error("Chat query error:", error);
+      const errorMsg = error.response?.data?.detail || "Failed to retrieve chatbot response. Please try again.";
+      toast.error(errorMsg);
+      
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `error-${Math.random().toString(36).substring(2, 9)}`,
+          sender: 'bot',
+          text: "I'm sorry, I encountered an issue querying the message router. Please make sure the service is running.",
+          isError: true,
+          timestamp: new Date()
+        }
+      ]);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const clearChat = () => {
+    setMessages([
+      {
+        id: 'greet-1',
+        sender: 'bot',
+        text: 'Hello! I am your Public Health Assistant. How can I help you today with your vaccinations or symptoms?',
+        timestamp: new Date()
+      }
+    ]);
+    toast.info("Chat history cleared.");
+  };
+
+  return (
+    <div className="h-[calc(100vh-10rem)] md:h-[calc(100vh-8rem)] flex flex-col lg:flex-row gap-6 animate-fade-in">
+      
+      {/* Left panel: Context configuration */}
+      <div className="w-full lg:w-80 shrink-0 bg-slate-950/40 border border-slate-850 p-5 rounded-3xl flex flex-col gap-5">
+        <div>
+          <h3 className="text-base font-bold text-white">
+            {isAdmin ? 'Interactive Sandbox' : 'Chat Assistant'}
+          </h3>
+          <p className="text-[11px] text-slate-400 mt-0.5">
+            {isAdmin ? 'Test NLP queries and language routing' : 'Get instant answers about vaccine schedules'}
+          </p>
+        </div>
+
+        {/* Language preference */}
+        <div className="space-y-2">
+          <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+            <Languages className="w-3.5 h-3.5 text-green-500" />
+            ISO Language Code
+          </label>
+          <select
+            value={language}
+            onChange={(e) => setLanguage(e.target.value)}
+            className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-green-500 transition-colors text-xs"
+          >
+            <option value="en">English (en)</option>
+            <option value="hi">Hindi (hi)</option>
+            <option value="te">Telugu (te)</option>
+          </select>
+        </div>
+
+        {/* Patient query context (Admin only) */}
+        {isAdmin && (
+          <div className="space-y-3 pt-3 border-t border-slate-900/60">
+            <div className="flex justify-between items-center">
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                <UserCheck className="w-3.5 h-3.5 text-green-500" />
+                Patient Profile Context
+              </label>
+              <button
+                onClick={() => setUseGuest(!useGuest)}
+                className="text-[10px] text-green-500 font-bold hover:text-green-400"
+              >
+                {useGuest ? 'Select Registered' : 'Anonymous Guest'}
+              </button>
+            </div>
+
+            {!useGuest ? (
+              <div className="space-y-2">
+                {loadingUsers ? (
+                  <div className="px-3 py-2 rounded-xl bg-slate-950 border border-slate-850 text-slate-500 text-xs flex items-center gap-2">
+                    <Loader className="w-3.5 h-3.5 animate-spin" />
+                    Loading patient ids...
+                  </div>
+                ) : (
+                  <select
+                    value={selectedUserId}
+                    onChange={(e) => setSelectedUserId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 focus:outline-none focus:border-green-500 transition-colors text-xs"
+                  >
+                    <option value={user?.id || ''}>Administrator ({user?.name || 'Self'})</option>
+                    {usersList.map((u) => (
+                      u.id !== user?.id && (
+                        <option key={u.id} value={u.id}>
+                          {u.name || 'Unnamed'} ({u.phone_number || 'No Phone'})
+                        </option>
+                      )
+                    ))}
+                  </select>
+                )}
+                <p className="text-[9px] text-slate-550 italic">
+                  Simulates NLP checking schedule metrics for this UUID.
+                </p>
+              </div>
+            ) : (
+              <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-900 text-slate-500 text-[11px] italic">
+                Running in Guest mode. The backend will automatically provision a temporary guest row in the database.
+              </div>
+            )}
+          </div>
+        )}
+
+        <button
+          onClick={clearChat}
+          className="w-full mt-auto flex items-center justify-center gap-2 py-2.5 rounded-xl border border-slate-800 hover:bg-rose-500/10 hover:border-rose-500/30 hover:text-rose-400 transition-all text-xs font-semibold"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+          Clear Chat Stream
+        </button>
+      </div>
+
+      {/* Right panel: Chat stream interface */}
+      <div className="flex-1 bg-slate-950/20 border border-slate-850 rounded-3xl overflow-hidden flex flex-col shadow-xl">
+        {/* Chat Header */}
+        <div className="px-6 py-4.5 bg-slate-950/40 border-b border-slate-850 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-green-500/10 border border-green-500/35 flex items-center justify-center">
+            <Bot className="w-5 h-5 text-green-400 animate-pulse" />
+          </div>
+          <div>
+            <h4 className="text-sm font-bold text-white">Public Health Chatbot</h4>
+            <span className="text-[10px] text-green-400 font-semibold flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block animate-ping"></span>
+              Synchronous API Endpoint Active
+            </span>
+          </div>
+        </div>
+
+        {/* Chat Feed */}
+        <div className="flex-1 p-6 overflow-y-auto space-y-5">
+          {messages.map((msg) => {
+            const isBot = msg.sender === 'bot';
+            return (
+              <div
+                key={msg.id}
+                className={`flex gap-3 max-w-[85%] ${isBot ? '' : 'ml-auto flex-row-reverse'}`}
+              >
+                {/* Avatar */}
+                <div className={`w-8.5 h-8.5 rounded-full shrink-0 flex items-center justify-center border ${
+                  isBot 
+                    ? 'bg-slate-950/70 border-slate-800 text-green-400' 
+                    : 'bg-green-500/10 border-green-500/30 text-green-400'
+                }`}>
+                  {isBot ? <Bot className="w-4.5 h-4.5" /> : <User className="w-4.5 h-4.5" />}
+                </div>
+
+                {/* Bubble */}
+                <div className="space-y-1">
+                  <div className={`p-4 rounded-2xl text-xs font-medium leading-relaxed leading-normal ${
+                    isBot
+                      ? msg.isError
+                        ? 'bg-rose-500/10 border border-rose-500/20 text-rose-350'
+                        : 'bg-slate-900 border border-slate-850 text-slate-200'
+                      : 'bg-gradient-to-tr from-green-600 to-emerald-500 text-white shadow-md shadow-green-500/10'
+                  }`}>
+                    {msg.text}
+                  </div>
+                  
+                  {/* Footer metadata */}
+                  <div className={`flex items-center gap-2 px-1 text-[9px] text-slate-550 ${isBot ? '' : 'justify-end'}`}>
+                    <span>
+                      {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                    {msg.detectedLanguage && (
+                      <span className="bg-slate-800 text-slate-400 px-1 py-0.5 rounded font-mono uppercase text-[8px]">
+                        Lang: {msg.detectedLanguage}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Typing loader */}
+          {sending && (
+            <div className="flex gap-3 max-w-[80%]">
+              <div className="w-8.5 h-8.5 rounded-full shrink-0 flex items-center justify-center border bg-slate-950/70 border-slate-800 text-green-400">
+                <Bot className="w-4.5 h-4.5" />
+              </div>
+              <div className="bg-slate-900 border border-slate-850 p-4 rounded-2xl flex items-center gap-1">
+                <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-bounce"></span>
+                <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-bounce [animation-delay:0.2s]"></span>
+                <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-bounce [animation-delay:0.4s]"></span>
+              </div>
+            </div>
+          )}
+          
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Input Form */}
+        <form onSubmit={handleSendMessage} className="p-4 bg-slate-950/40 border-t border-slate-850 flex gap-3">
+          <input
+            type="text"
+            required
+            disabled={sending}
+            placeholder={sending ? "Bot is thinking..." : `Ask about vaccine center locations or schedules in '${language}'...`}
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            className="flex-1 px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-green-500 transition-colors text-xs disabled:opacity-50"
+          />
+          <button
+            type="submit"
+            disabled={sending || !inputText.trim()}
+            className="p-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white shadow-md shadow-green-500/10 active:scale-95 transition-all disabled:opacity-30 disabled:pointer-events-none"
+          >
+            <Send className="w-4.5 h-4.5" />
+          </button>
+        </form>
+      </div>
+
+    </div>
+  );
+};
+
+export default Chatbot;

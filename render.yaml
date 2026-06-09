@@ -1,0 +1,30 @@
+services:
+  # Backend FastAPI Service
+  - type: web
+    name: healthguard-backend
+    rootDir: backend
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: healthguard-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: BACKEND_CORS_ORIGINS
+        value: "*"
+      - key: TWILIO_ACCOUNT_SID
+        value: ACmockaccountsd123456789
+      - key: TWILIO_AUTH_TOKEN
+        value: mockauthtoken123456789
+      - key: TWILIO_PHONE_NUMBER
+        value: +18449013032
+
+databases:
+  - name: healthguard-db
+    databaseName: healthbot
+    plan: free

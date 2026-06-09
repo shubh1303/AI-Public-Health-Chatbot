@@ -1,0 +1,419 @@
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import api from '../services/api';
+import vaccinationService from '../services/vaccinationService';
+import { useToast } from '../components/Toast';
+import { 
+  Syringe, 
+  Users, 
+  CheckCircle2, 
+  BellRing,
+  ArrowRight,
+  PlusCircle,
+  ListTodo,
+  MessageCircle,
+  TrendingUp,
+  RefreshCw,
+  PhoneCall,
+  Activity
+} from 'lucide-react';
+import { 
+  ResponsiveContainer, 
+  AreaChart, 
+  Area, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip as ChartTooltip, 
+  BarChart, 
+  Bar, 
+  Cell, 
+  PieChart, 
+  Pie, 
+  Legend 
+} from 'recharts';
+
+const Dashboard = () => {
+  const navigate = useNavigate();
+  const toast = useToast();
+
+  const [analytics, setAnalytics] = useState({
+    total_patients: 0,
+    total_scheduled: 0,
+    total_administered: 0,
+    pending_count: 0,
+    sms_success_rate: 100.0,
+    trend_data: [],
+    delivery_data: [],
+    status_data: []
+  });
+  
+  const [recentVaccinations, setRecentVaccinations] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [triggering, setTriggering] = useState(false);
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch compiled analytics from dedicated DB aggregation endpoint
+      const response = await api.get('/api/v1/admin/analytics');
+      setAnalytics(response.data);
+      
+      // Fetch latest vaccine records for the listing
+      const data = await vaccinationService.getVaccinations();
+      const sorted = [...data].sort((a, b) => new Date(b.scheduled_date) - new Date(a.scheduled_date));
+      setRecentVaccinations(sorted.slice(0, 5));
+    } catch (error) {
+      console.error("Failed to load dashboard metrics:", error);
+      toast.error("Unable to load live dashboard statistics.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const handleTriggerReminders = async () => {
+    setTriggering(true);
+    try {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const result = await vaccinationService.triggerReminders(todayStr);
+      toast.success(`Reminder Dispatch Complete! Sent ${result.reminders_sent} SMS/WhatsApp alerts for schedules on ${result.scheduled_date}.`);
+      await fetchDashboardData(); // Reload stats and charts
+    } catch (error) {
+      console.error("Failed to trigger notifications:", error);
+      const errorMsg = error.response?.data?.detail || "An error occurred while scanning and sending alerts.";
+      toast.error(errorMsg);
+    } finally {
+      setTriggering(false);
+    }
+  };
+
+  const dashboardCards = [
+    {
+      title: 'Schedule Vaccination',
+      desc: 'Register new vaccine schedule entries for patients in the database.',
+      link: '/admin/schedule',
+      icon: PlusCircle,
+      color: 'from-green-500/10 to-emerald-500/5 hover:border-green-500/40 text-green-400'
+    },
+    {
+      title: 'Records Log',
+      desc: 'Browse, search, filter, and edit all scheduled vaccinations.',
+      link: '/admin/vaccinations',
+      icon: ListTodo,
+      color: 'from-indigo-500/10 to-blue-500/5 hover:border-indigo-500/40 text-indigo-400'
+    },
+    {
+      title: 'Sandbox Chatbot',
+      desc: 'Simulate chatbot flow interactions, intents, and translations.',
+      link: '/admin/chatbot',
+      icon: MessageCircle,
+      color: 'from-purple-500/10 to-pink-500/5 hover:border-purple-500/40 text-purple-400'
+    }
+  ];
+
+  // Map status pie colors
+  const STATUS_COLORS = {
+    'Administered': '#16A34A', // Green
+    'Upcoming': '#3B82F6',     // Blue
+    'Missed': '#EF4444'        // Red
+  };
+
+  // Map delivery bar colors
+  const DELIVERY_COLORS = {
+    'Sent': '#10B981',    // Emerald
+    'Pending': '#F59E0B', // Amber
+    'Failed': '#EF4444'   // Red
+  };
+
+  if (loading && analytics.total_scheduled === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <RefreshCw className="w-10 h-10 text-green-500 animate-spin mb-4" />
+        <p className="text-slate-400 font-medium animate-pulse text-xs">Loading analytics data...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-10 animate-fade-in">
+      {/* Header bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-6 border-b border-slate-800">
+        <div>
+          <h2 className="text-2xl font-extrabold text-white tracking-tight">Analytics Console</h2>
+          <p className="text-xs text-slate-400 mt-1 font-medium">Real-time public health vaccination KPIs</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={fetchDashboardData}
+            className="p-3 rounded-xl border border-slate-850 hover:bg-slate-850 text-slate-400 hover:text-white transition-all active:scale-95"
+            title="Refresh statistics"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
+          <button
+            onClick={handleTriggerReminders}
+            disabled={triggering}
+            className="flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-550 text-white text-xs font-semibold transition-all shadow-md shadow-green-500/15 active:scale-95 disabled:opacity-50"
+          >
+            <BellRing className={`w-4 h-4 ${triggering ? 'animate-bounce' : ''}`} />
+            {triggering ? 'Sending Alerts...' : "Trigger Today's Reminders"}
+          </button>
+        </div>
+      </div>
+
+      {/* KPI Stats Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* KPI 1: Total Patients */}
+        <div className="bg-slate-950/45 border border-slate-850 rounded-2xl p-6 transition-all duration-300 transform hover:-translate-y-1 hover:border-slate-800 flex items-center justify-between">
+          <div>
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Total Patients</span>
+            <h3 className="text-2xl font-black text-white mt-2 tracking-tight">{analytics.total_patients}</h3>
+            <div className="flex items-center gap-1.5 mt-2.5 text-[10px] text-green-400 font-medium">
+              <Users className="w-3.5 h-3.5" />
+              <span>Registered patient slots</span>
+            </div>
+          </div>
+          <div className="p-4 rounded-xl bg-green-500/10 text-green-400">
+            <Users className="w-6 h-6" />
+          </div>
+        </div>
+
+        {/* KPI 2: Total Scheduled */}
+        <div className="bg-slate-950/45 border border-slate-850 rounded-2xl p-6 transition-all duration-300 transform hover:-translate-y-1 hover:border-slate-800 flex items-center justify-between">
+          <div>
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Total Scheduled</span>
+            <h3 className="text-2xl font-black text-white mt-2 tracking-tight">{analytics.total_scheduled}</h3>
+            <div className="flex items-center gap-1.5 mt-2.5 text-[10px] text-indigo-400 font-medium">
+              <Activity className="w-3.5 h-3.5" />
+              <span>Schedules logged</span>
+            </div>
+          </div>
+          <div className="p-4 rounded-xl bg-indigo-500/10 text-indigo-400">
+            <Syringe className="w-6 h-6" />
+          </div>
+        </div>
+
+        {/* KPI 3: Administered */}
+        <div className="bg-slate-950/45 border border-slate-850 rounded-2xl p-6 transition-all duration-300 transform hover:-translate-y-1 hover:border-slate-800 flex items-center justify-between">
+          <div>
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Administered</span>
+            <h3 className="text-2xl font-black text-white mt-2 tracking-tight">{analytics.total_administered}</h3>
+            <div className="flex items-center gap-1.5 mt-2.5 text-[10px] text-teal-400 font-medium">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>
+                {analytics.total_scheduled > 0 
+                  ? Math.round((analytics.total_administered / analytics.total_scheduled) * 100) 
+                  : 0}% completion rate
+              </span>
+            </div>
+          </div>
+          <div className="p-4 rounded-xl bg-teal-500/10 text-teal-400">
+            <CheckCircle2 className="w-6 h-6" />
+          </div>
+        </div>
+
+        {/* KPI 4: SMS Success Rate */}
+        <div className="bg-slate-950/45 border border-slate-850 rounded-2xl p-6 transition-all duration-300 transform hover:-translate-y-1 hover:border-slate-800 flex items-center justify-between">
+          <div>
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">SMS Dispatch Rate</span>
+            <h3 className="text-2xl font-black text-white mt-2 tracking-tight">{analytics.sms_success_rate}%</h3>
+            <div className="flex items-center gap-1.5 mt-2.5 text-[10px] text-amber-400 font-medium">
+              <PhoneCall className="w-3.5 h-3.5" />
+              <span>Twilio delivery safety</span>
+            </div>
+          </div>
+          <div className="p-4 rounded-xl bg-amber-500/10 text-amber-400">
+            <BellRing className="w-6 h-6" />
+          </div>
+        </div>
+      </div>
+
+      {/* Recharts Analytics Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* Trend Area Chart (Span 2) */}
+        <div className="lg:col-span-2 bg-slate-950/40 border border-slate-850 p-6 rounded-3xl space-y-4">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-bold text-white uppercase tracking-wider">Vaccination Trends Over Time</h4>
+            <span className="text-[10px] text-green-400 font-bold bg-green-500/10 px-2 py-0.5 rounded-md flex items-center gap-1">
+              <TrendingUp className="w-3.5 h-3.5" />
+              Live DB Aggregation
+            </span>
+          </div>
+          <div className="h-72 w-full text-xs font-semibold text-slate-400">
+            {analytics.trend_data.length === 0 ? (
+              <div className="h-full flex items-center justify-center italic text-slate-650">No timeline data available.</div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={analytics.trend_data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorTrend" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#16A34A" stopOpacity={0.4}/>
+                      <stop offset="95%" stopColor="#16A34A" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
+                  <XAxis dataKey="date" stroke="#64748B" tickLine={false} />
+                  <YAxis stroke="#64748B" tickLine={false} />
+                  <ChartTooltip 
+                    contentStyle={{ backgroundColor: '#0F172A', borderColor: '#1E293B', borderRadius: '12px' }}
+                    labelClassName="text-white font-bold"
+                  />
+                  <Area type="monotone" dataKey="count" name="Schedules" stroke="#16A34A" strokeWidth={2.5} fillOpacity={1} fill="url(#colorTrend)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+        {/* Pie Status Chart */}
+        <div className="bg-slate-950/40 border border-slate-850 p-6 rounded-3xl space-y-4 flex flex-col justify-between">
+          <h4 className="text-sm font-bold text-white uppercase tracking-wider">Vaccination Status</h4>
+          <div className="h-60 w-full relative">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={analytics.status_data}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={80}
+                  paddingAngle={5}
+                  dataKey="value"
+                >
+                  {analytics.status_data.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={STATUS_COLORS[entry.name] || '#64748B'} />
+                  ))}
+                </Pie>
+                <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Bar Delivery Chart */}
+        <div className="lg:col-span-3 bg-slate-950/40 border border-slate-850 p-6 rounded-3xl space-y-4">
+          <h4 className="text-sm font-bold text-white uppercase tracking-wider">SMS Alert Delivery Metrics</h4>
+          <div className="h-64 w-full text-xs font-semibold text-slate-400">
+            {analytics.delivery_data.length === 0 ? (
+              <div className="h-full flex items-center justify-center italic text-slate-650">No delivery logs recorded.</div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={analytics.delivery_data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
+                  <XAxis dataKey="name" stroke="#64748B" tickLine={false} />
+                  <YAxis stroke="#64748B" tickLine={false} />
+                  <ChartTooltip 
+                    contentStyle={{ backgroundColor: '#0F172A', borderColor: '#1E293B', borderRadius: '12px' }}
+                    labelClassName="text-white font-bold"
+                  />
+                  <Bar dataKey="value" name="Alerts" radius={[8, 8, 0, 0]}>
+                    {analytics.delivery_data.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={DELIVERY_COLORS[entry.name] || '#64748B'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+      </div>
+
+      {/* Quick Navigation Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {dashboardCards.map((card, i) => {
+          const Icon = card.icon;
+          return (
+            <div
+              key={i}
+              onClick={() => navigate(card.link)}
+              className={`p-6 rounded-2xl border border-slate-850 bg-gradient-to-br ${card.color} cursor-pointer transition-all duration-300 transform hover:-translate-y-1 hover:shadow-lg flex flex-col justify-between group`}
+            >
+              <div>
+                <div className="w-10 h-10 rounded-xl bg-slate-950/50 flex items-center justify-center mb-4">
+                  <Icon className="w-5 h-5" />
+                </div>
+                <h4 className="text-lg font-bold text-white mb-1.5">{card.title}</h4>
+                <p className="text-xs text-slate-400 leading-relaxed">{card.desc}</p>
+              </div>
+              <div className="mt-6 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider group-hover:gap-2.5 transition-all">
+                <span>Configure</span>
+                <ArrowRight className="w-4 h-4" />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Recent Vaccination list */}
+      <div className="bg-slate-950/30 border border-slate-850 rounded-3xl p-6 md:p-8">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h4 className="text-lg font-bold text-white">Recent Schedule Additions</h4>
+            <p className="text-xs text-slate-400 mt-0.5">Lately logged database entries</p>
+          </div>
+          <button
+            onClick={() => navigate('/admin/vaccinations')}
+            className="flex items-center gap-1 text-xs font-bold text-green-400 hover:text-green-300"
+          >
+            View all records
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
+
+        {recentVaccinations.length === 0 ? (
+          <div className="text-center py-8 border border-dashed border-slate-800 rounded-2xl">
+            <p className="text-slate-500 text-sm">No scheduled vaccinations logged yet.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-slate-800 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  <th className="py-3.5 px-4">Vaccine Name</th>
+                  <th className="py-3.5 px-4">Dose</th>
+                  <th className="py-3.5 px-4">Scheduled Date</th>
+                  <th className="py-3.5 px-4">Patient ID</th>
+                  <th className="py-3.5 px-4">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-850 text-xs">
+                {recentVaccinations.map((vac) => (
+                  <tr 
+                    key={vac.id}
+                    onClick={() => navigate(`/admin/vaccinations/${vac.id}`)}
+                    className="hover:bg-slate-950/20 cursor-pointer transition-colors"
+                  >
+                    <td className="py-4 px-4 font-bold text-slate-200">{vac.vaccine_name}</td>
+                    <td className="py-4 px-4 text-slate-400">Dose {vac.dose_number}</td>
+                    <td className="py-4 px-4 text-slate-350 font-mono text-xs">{vac.scheduled_date}</td>
+                    <td className="py-4 px-4 text-slate-500 font-mono text-xs truncate max-w-[150px]">{vac.user_id}</td>
+                    <td className="py-4 px-4">
+                      {vac.administered_date ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500/10 text-green-400 text-[10px] font-bold uppercase tracking-wider">
+                          Administered
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-450 text-[10px] font-bold uppercase tracking-wider">
+                          Scheduled
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default Dashboard;
