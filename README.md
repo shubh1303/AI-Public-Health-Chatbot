@@ -290,10 +290,6 @@ Parse the exported JSON files and insert records into the corresponding PostgreS
 
 ---
 
-## 📄 License
-
-This project is open for educational and portfolio use. See [LICENSE](./LICENSE) for details.
-
 ---
 
 <div align="center">
