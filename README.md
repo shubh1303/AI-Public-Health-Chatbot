@@ -300,6 +300,4 @@ This project is open for educational and portfolio use. See [LICENSE](./LICENSE)
 
 Built with ❤️ as a full-stack software engineering portfolio project.
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com)
-
 </div>
