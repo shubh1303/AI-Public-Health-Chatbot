@@ -69,7 +69,7 @@
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                        CLIENT LAYER                         │
-│   React 18 + Vite  │  Tailwind CSS  │  Axios HTTP Client   │
+│   React 18 + Vite  │  Tailwind CSS  │  Axios HTTP Client    │
 │   React Router     │  Error Boundary│  Protected Routes     │
 └────────────────────────────┬────────────────────────────────┘
                              │ HTTPS
