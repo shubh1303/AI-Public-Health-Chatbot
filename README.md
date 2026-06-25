@@ -29,15 +29,19 @@
 
 ---
 
-## 🚀 Live Deployment
+## Live Demo
 
-| Service | URL | Status |
-|:--------|:----|:-------|
-| 🌐 **Backend API** | [healthguard-ai-public-health-management.onrender.com]([https://healthguard-ai-public-health-management.onrender.com](https://healthguard-ai-public-health-management.onrender.com/docs)) | ✅ Live |
-| 📄 **Swagger Docs** | [/docs]([https://healthguard-ai-public-health-management.onrender.com/docs](https://healthguard-ai-public-health-management.onrender.com/docs)) | ✅ Live |
-| 💓 **Health Check** | [/health]([https://healthguard-ai-public-health-management.onrender.com/health](https://ai-public-health-chatbot-j22k.onrender.com/)) | ✅ Live |
+Backend API:
+https://healthguard-ai-public-health-management.onrender.com
+
+API Documentation:
+https://healthguard-ai-public-health-management.onrender.com/docs
+
+Health Check:
+https://healthguard-ai-public-health-management.onrender.com/health
 
 > **Note:** The Render free tier spins down after periods of inactivity. The first request may take 30–60 seconds to cold-start.
+
 
 ---
 

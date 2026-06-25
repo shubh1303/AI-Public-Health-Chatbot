@@ -7,7 +7,7 @@ services:
     restart: always
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: securedbpassword123
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: healthbot
     ports:
       - "5432:5432"
@@ -27,8 +27,8 @@ services:
     restart: always
     environment:
       ENVIRONMENT: production
-      DATABASE_URL: postgresql://postgres:securedbpassword123@db:5432/healthbot
-      SECRET_KEY: change-this-to-something-very-secure-in-prod-abcde12345
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/healthbot
+      SECRET_KEY: ${SECRET_KEY}
       BACKEND_CORS_ORIGINS: "*"
       TWILIO_ACCOUNT_SID: ACmockaccountsd123456789
       TWILIO_AUTH_TOKEN: mockauthtoken123456789

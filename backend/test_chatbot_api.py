@@ -1,3 +1,7 @@
+import os
+os.environ["SECRET_KEY"] = "test-secret-key-for-tests-only-not-for-prod"
+os.environ["WHATSAPP_VERIFY_TOKEN"] = "test-whatsapp-verify-token-for-tests-only"
+
 import sys
 sys.stdout.reconfigure(encoding='utf-8')
 from fastapi.testclient import TestClient

@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
 
     # JWT Security Settings
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "super-secret-key-change-in-production-123456789")
+    SECRET_KEY: str | None = os.getenv("SECRET_KEY")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "11520"))  # Default 8 Days
     REFRESH_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("REFRESH_TOKEN_EXPIRE_MINUTES", "20160")) # Default 14 Days
@@ -32,14 +32,16 @@ class Settings(BaseSettings):
     # WhatsApp Cloud API Settings
     WHATSAPP_API_TOKEN: str = os.getenv("WHATSAPP_API_TOKEN", "mockwatoken123456789")
     WHATSAPP_PHONE_NUMBER_ID: str = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "mockwaphoneid123456")
-    WHATSAPP_VERIFY_TOKEN: str = os.getenv("WHATSAPP_VERIFY_TOKEN", "my-secret-verify-token-1234")
+    WHATSAPP_VERIFY_TOKEN: str | None = os.getenv("WHATSAPP_VERIFY_TOKEN")
 
     # NLP & Translation Services
     RASA_URL: str = os.getenv("RASA_URL", "http://localhost:5005")
     TRANSLATION_API_URL: str = os.getenv("TRANSLATION_API_URL", "http://localhost:8001")
 
     # CORS Policy settings
-    BACKEND_CORS_ORIGINS: List[str] = ["*"]
+    BACKEND_CORS_ORIGINS: List[str] = [
+        x.strip() for x in os.getenv("BACKEND_CORS_ORIGINS", "http://localhost:5173").split(",") if x.strip()
+    ]
 
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
@@ -64,8 +66,10 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_production_secrets(self) -> "Settings":
         if self.ENVIRONMENT == "production":
-            if self.SECRET_KEY == "super-secret-key-change-in-production-123456789":
-                raise ValueError("SECRET_KEY must be changed from the default value in a production environment!")
+            if not self.SECRET_KEY:
+                raise ValueError("SECRET_KEY must be configured in a production environment!")
+            if not self.WHATSAPP_VERIFY_TOKEN:
+                raise ValueError("WHATSAPP_VERIFY_TOKEN must be configured in a production environment!")
         return self
 
 settings = Settings()
