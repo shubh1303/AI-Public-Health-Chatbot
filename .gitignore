@@ -1,6 +1,7 @@
 backend/healthbot.db
 frontend/.env
 
+.env.example
 .env
 .env.local
 .env.production
